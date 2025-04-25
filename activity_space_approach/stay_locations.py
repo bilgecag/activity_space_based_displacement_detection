@@ -14,28 +14,16 @@ tqdm.pandas()
 def calculate_pre_post_stay_locations(all_stays=None, filepath=None, earthquake_timestamp=pd.Timestamp('2023-02-06 04:00:00')):
     """
     Calculate pre-earthquake and post-earthquake customer stay locations.
-
-    Parameters:
-    - all_stays: DataFrame/GeoDataFrame containing stay information (default: None)
-    - filepath: Optional string filepath to load data from if all_stays is not provided (default: None)
-    - earthquake_timestamp: Timestamp of the earthquake event (default: '2023-02-06 04:00:00')
-
-    Returns:
-    - df_pre_earthquake_stays: GeoDataFrame containing pre-earthquake stays
-    - df_post_earthquake_stays: GeoDataFrame containing post-earthquake stays
     """
-    # Load data if all_stays is not provided but filepath is
     if all_stays is None and filepath is not None:
         all_stays = pd.read_csv(filepath, index_col=0)
     elif all_stays is None and filepath is None:
         raise ValueError("Either all_stays or filepath must be provided")
 
-    # Convert timestamps to datetime
     all_stays["end_time"] = pd.to_datetime(all_stays['end_time'])
     all_stays["start_time"] = pd.to_datetime(all_stays['start_time'])
 
 
-    # Process stays before earthquake
     df_pre_earthquake_stays = all_stays[all_stays['start_time'] < earthquake_timestamp].reset_index(drop=True)
     df_pre_earthquake_stays = gpd.GeoDataFrame(df_pre_earthquake_stays, geometry='geometry', crs="EPSG:32636")
     df_pre_earthquake_stays['end_time'] = df_pre_earthquake_stays['end_time'].clip(upper=earthquake_timestamp)
@@ -44,7 +32,6 @@ def calculate_pre_post_stay_locations(all_stays=None, filepath=None, earthquake_
     df_pre_earthquake_stays = df_pre_earthquake_stays[df_pre_earthquake_stays["geometry"].notna()].reset_index(drop=True)
     df_pre_earthquake_stays = df_pre_earthquake_stays[["customer_id", "clusters", "geometry", "start_time", "end_time", "stay_id", "duration"]]
 
-    # Process stays after earthquake
     df_post_earthquake_stays = all_stays[all_stays['end_time'] > earthquake_timestamp].reset_index(drop=True)
     df_post_earthquake_stays = gpd.GeoDataFrame(df_post_earthquake_stays, geometry='geometry', crs="EPSG:32636")
     df_post_earthquake_stays['start_time'] = df_post_earthquake_stays['start_time'].clip(lower=earthquake_timestamp)
@@ -59,41 +46,24 @@ def calculate_all_stays(gdf_all, final_df, distance_threshold=2000, duration_thr
                         npartitions=None):
     """
     Calculate all customer stays based on mobility diary.
-
-    Parameters:
-    - gdf_all: GeoDataFrame with customer location data
-    - final_df: DataFrame with customer information including segments
-    - distance_threshold: Threshold distance in meters to consider a new location (default: 2000)
-    - duration_threshold: Threshold duration in seconds to consider a stay (default: 7200)
-    - use_dask: Whether to use dask for parallel processing (default: False)
-    - npartitions: Number of partitions if using dask (default: None)
-
-    Returns:
-    - all_stays: DataFrame containing all customer stays with duration and location information
-    - all_trips: DataFrame containing all customer trips between stays
     """
-    # Create customer mobility diary
     all_stays, all_trips = create_customer_mobility_diary(
         gdf_all.reset_index(drop=True).reset_index(drop=True),
         distance_threshold=distance_threshold,
         duration_threshold=duration_threshold,
     )
 
-    # Process stays data
     all_stays = all_stays[all_stays['duration'] != 0].reset_index()
     all_stays["end_time"] = pd.to_datetime(all_stays['end_time'])
     all_stays["start_time"] = pd.to_datetime(all_stays['start_time'])
 
-    # Merge with customer segment information
     all_stays = all_stays.drop(columns=['index']).merge(
         final_df.drop_duplicates(subset='customer_id', keep='first')[['customer_id', 'segment']],
         on='customer_id'
     )
 
-    # Add stay_id for each customer
     all_stays["stay_id"] = all_stays.groupby('customer_id').cumcount()
 
-    # Convert clusters to string type
     all_stays["clusters"] = all_stays["clusters"].astype(str)
 
     return all_stays, all_trips
@@ -102,44 +72,28 @@ def calculate_all_stays(gdf_all, final_df, distance_threshold=2000, duration_thr
 def calculate_stay_polygons(all_stays, cluster_voronoi):
     """
     Calculate stay polygons from customer stay data.
-
-    Parameters:
-    - all_stays: GeoDataFrame containing stay information with clusters data
-    - cluster_voronoi: Voronoi diagram data for clusters to generate convex hulls
-    - output_path: Optional path to save the output GeoPackage file
-
-    Returns:
-    - gdf_stays: GeoDataFrame with unique cluster geometries
-    - valid_stays: GeoDataFrame with processed customer stay geometries
     """
-    # Calculate convex hull for each cluster group
     all_stays['convex_hull'] = all_stays['clusters'].progress_apply(lambda x: get_convex_hull(x, cluster_voronoi))
 
-    # Create GeoDataFrame with convex hull geometry
     all_stays_gdf = gpd.GeoDataFrame(all_stays, geometry='convex_hull')
 
-    # Filter for valid geometries
     valid_stays = all_stays_gdf[all_stays_gdf.is_valid].reset_index(drop=True)
     valid_stays["clusters"] = valid_stays["clusters"].astype(str)
 
-    # Get unique stays per customer-cluster combination
     unique_stays = valid_stays[['customer_id', 'clusters']].drop_duplicates(
         subset=['customer_id', 'clusters'],
         keep='first'
     )
 
-    # Merge to get geometry information
     unique_stays_with_geom = unique_stays.merge(
         valid_stays[['customer_id', 'clusters', 'convex_hull']],
         on=['customer_id', 'clusters']
     )
 
-    # Create GeoDataFrame for unique stays
     gdf_stays = gpd.GeoDataFrame(unique_stays_with_geom, geometry='convex_hull')
     gdf_stays = gdf_stays.rename(columns={'convex_hull': 'geometry'})
     gdf_stays = gdf_stays.drop_duplicates(["clusters"])[["clusters", "geometry"]]
 
-    # Process valid stays for output
     valid_stays['convex_hull'] = valid_stays['convex_hull'].astype(str)
     valid_stays['geometry'] = gpd.GeoSeries.from_wkt(valid_stays['convex_hull'])
     valid_stays = valid_stays.set_geometry('geometry')
@@ -147,7 +101,6 @@ def calculate_stay_polygons(all_stays, cluster_voronoi):
     valid_stays["end_geometry"] = valid_stays["end_geometry"].astype(str)
     valid_stays["start_geometry"] = valid_stays["start_geometry"].astype(str)
 
-    # Convert any other object columns that might be causing issues
     for col in valid_stays.select_dtypes(include=['object']):
         if col != 'geometry':
             valid_stays[col] = valid_stays[col].astype(str)
@@ -160,19 +113,10 @@ def calculate_stay_polygons(all_stays, cluster_voronoi):
 def create_customer_mobility_diary(df, distance_threshold=20000, duration_threshold=21600):
     """
     Creates a mobility diary for customers by identifying stays and trips based on location data.
-
-    Parameters:
-    - df: GeoDataFrame containing customer location data with columns 'customer_id', 'time', 'geometry', and 'cluster'
-    - distance_threshold: Maximum distance in meters to consider a location part of the same stay (default: 20000)
-    - duration_threshold: Minimum duration in seconds to consider a period as a stay (default: 21600)
-
-    Returns:
-    - all_stays: GeoDataFrame containing all identified stays with duration and location details
-    - all_trips: GeoDataFrame containing all identified trips between stays
     """
 
     def process_group(group):
-        customer_id = group['customer_id'].iloc[0]  # Get the customer_id for this group
+        customer_id = group['customer_id'].iloc[0]  
         group = group.sort_values('time')
 
         stays = []

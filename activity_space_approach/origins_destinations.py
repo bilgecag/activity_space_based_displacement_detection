@@ -49,14 +49,6 @@ def classify_displacement_return(migration_df, earthquake_date='20230206'):
 def match_home_locations_with_displacements(eq, cluster_voronoi, clusters, customer_list):
     """
     Match home locations with displacement locations for customers in the given list.
-
-    Args:
-        eq: DataFrame with [time, customer_id, site_id, segment]
-        cluster_voronoi: DataFrame with [site_id, voronoi_geometry] and other columns
-        customer_list: List of customer IDs to filter by
-
-    Returns:
-        DataFrame with [customer_id, origin_geometry, destination_geometry]
     """
     eq_filtered = eq[eq['customer_id'].isin(customer_list)].copy()
     eq_filtered = eq_filtered.merge(pd.read_csv(clusters, index_col=0), on="site_id", how="left")
@@ -139,14 +131,6 @@ def match_home_locations_with_displacements(eq, cluster_voronoi, clusters, custo
 def match_stays_with_displacements(labeled_migrations, all_stays, match_type='origin'):
     """
     Match migration entries with stay data based on specified match type
-
-    Parameters:
-    labeled_migrations: DataFrame with migration/displacement data
-    all_stays: DataFrame with stay/location data (all_stays_before or all_stays_after)
-    match_type: 'origin' to match home dates, 'destination' to match destination dates
-
-    Returns:
-    DataFrame with matched migration and polygon data
     """
     labeled_migrations = labeled_migrations.copy()
     all_stays_copy = all_stays.copy()

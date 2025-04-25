@@ -25,21 +25,6 @@ def read_fine_grained(dir_finegrained, datatype):
 
 
 def filter_customers(cust_df, signal_count, unique_days_threshold, night_signal_threshold, customer_list=None, include_customers=True):
-    """
-    Filters customers based on signal count, unique days threshold, and night signal threshold.
-    Optionally filters by a list of customer IDs to include or exclude.
-
-    Parameters:
-    - cust_df: DataFrame containing customer data.
-    - signal_count: Minimum number of signals to include a customer.
-    - unique_days_threshold: Minimum number of unique days with signals to include a customer.
-    - night_signal_threshold: Minimum number of signals at night to include a customer.
-    - customer_list: Optional list of customer IDs to further filter the DataFrame. Default is None.
-    - include_customers: Determines whether to include (True) or exclude (False) the customers in the customer_list. Default is True.
-
-    Returns:
-    - DataFrame of filtered customers.
-    """
     filtered_df = cust_df[
         (cust_df['signal_count'] >= signal_count) &
         (cust_df['unique_days_count'] >= unique_days_threshold) &
@@ -91,16 +76,6 @@ def calculate_date_values(df):
 
 
 def process_cdr_data(file_path_outgoing, file_ids=['7','7_2','7_3','7_4','7_5']):
-    """
-    Process CDR data from multiple files and create a filtered DataFrame of outgoing calls.
-    
-    Parameters:
-    - file_path_outgoing: String format with placeholder for file ID
-    - file_ids: List of file identifiers to process
-    
-    Returns:
-    - final_df: Processed and filtered DataFrame containing outgoing CDR data
-    """
     final_df = pd.DataFrame()
     
     for i in file_ids:
@@ -137,20 +112,6 @@ def filter_affected_customers(
     final_df, 
     clusters_shapefile
 ):
-    """
-    Filter CDR data to include only customers affected by earthquakes based on their last known location.
-    
-    Parameters:
-    - clusters_file: Path to CSV file containing tower clusters information
-    - earthquake_cities: List of city IDs affected by earthquake
-    - tower_location: Path to tower location data file
-    - voronoi_file: Path to voronoi shapefile for tower coverage
-    - final_df: DataFrame containing CDR data
-    - clusters_shapefile: Path to clusters shapefile
-    
-    Returns:
-    - gdf_all: GeoDataFrame with filtered data for affected customers
-    """
     
     df_clusters = pd.read_csv(clusters_file, index_col=0)
     
