@@ -1,0 +1,52 @@
+{
+  "h3_resolution": 6,
+  "k_anonymity": 10,
+  "format": "GeoParquet, hexagon polygons in EPSG:4326",
+  "allocation": "per-person unit mass split over stay cells by night-spent share",
+  "calibration": "per-group totals scaled to the counts declared in the paper, before suppression",
+  "suppression": "cells with fewer than k distinct contributing people are removed",
+  "datasets": {
+    "displaced_persons_origin_h3r6_turkish": {
+      "users_in_run": 7200,
+      "declared_total": 6527,
+      "calibration_factor": 0.9065,
+      "published_total": 5445,
+      "suppressed_total": 1082,
+      "suppressed_cells": 834,
+      "published_cells": 98
+    },
+    "displaced_persons_destination_h3r6_turkish": {
+      "users_in_run": 7200,
+      "declared_total": 6527,
+      "calibration_factor": 0.9065,
+      "published_total": 2320,
+      "suppressed_total": 4207,
+      "suppressed_cells": 2675,
+      "published_cells": 123
+    },
+    "displaced_persons_origin_h3r6_syrian": {
+      "users_in_run": 4519,
+      "declared_total": 4088,
+      "calibration_factor": 0.9046,
+      "published_total": 3386,
+      "suppressed_total": 702,
+      "suppressed_cells": 514,
+      "published_cells": 64
+    },
+    "displaced_persons_destination_h3r6_syrian": {
+      "users_in_run": 4519,
+      "declared_total": 4088,
+      "calibration_factor": 0.9046,
+      "published_total": 2375,
+      "suppressed_total": 1713,
+      "suppressed_cells": 1462,
+      "published_cells": 91
+    },
+    "urbanization_index_h3r6": {
+      "cells": 20634
+    },
+    "damage_index_h3r6": {
+      "cells": 20634
+    }
+  }
+}
