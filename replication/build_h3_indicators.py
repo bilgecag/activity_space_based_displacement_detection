@@ -6,20 +6,27 @@ Builds, from the pipeline outputs and the raw context data:
    origin and the destination side and for the Syrian and Turkish groups.
    Pre-disaster stay areas of a displaced person are their origin,
    post-disaster stay areas their destination. A stay location is not a
-   person, so each person contributes one unit of mass distributed over
-   the H3 cells of their stay centroids proportionally to the nights they
-   spent in each (their night-spent share). Cell values are the sums of
-   these per-person shares: person counts in total, with the spatial
-   distribution of the actual stay locations. The sums are calibrated so
-   the per-group totals match the displaced-person counts declared in the
-   paper and rounded to the nearest whole person. k-anonymity with k = 10
-   is applied AFTER calibration, separately for each group and side: a
-   cell is published only if at least ten distinct people of that group
-   contribute to it AND its rounded count is at least ten, so no number
-   below ten is ever reported. The published files sum to the declared
-   totals minus the suppressed remainder. The declared total, the
-   published total, and the suppressed remainder of every file are
-   reported in the metadata file.
+   person, so each observed displaced person contributes one unit of mass
+   distributed over the H3 cells of their stay centroids proportionally to
+   the nights they spent in each (their night-spent share). Cell values
+   start as the sums of these per-person shares: the spatial distribution
+   of the actual stay locations.
+
+   Publication happens in three steps, separately per group and side:
+
+   a. Primary k-anonymity (k = 10): only cells to which at least ten
+      distinct observed people of the group contribute are kept.
+   b. The paper's extrapolated population estimates are distributed over
+      the protected cells proportionally to their observed mass —
+      860,000 Turkish DPs (560,000 to other cities + 300,000 within
+      city boundaries) and 70,000 Syrian DPs (55,000 + 15,000) — and
+      rounded to whole people. Published values are therefore estimated
+      displaced-population counts, not observed device counts.
+   c. Secondary cut: any cell whose extrapolated count is below ten is
+      removed, so no number below ten is ever reported.
+
+   The extrapolated total, the published total, and the suppressed
+   remainder of every file are reported in the metadata file.
 
 2. The urbanization and infrastructure-damage indices of the paper,
    aggregated to the same H3 resolution-6 cells (intersection-area-weighted
@@ -61,10 +68,10 @@ RUN = cfg.OUTPUT_DIR
 H3_RESOLUTION = 6
 K_ANONYMITY = 10
 
-# Displaced-person totals as declared in the publication (Fig. 8 population:
-# detected DPs with matched origin/destination features and distance > 10 m;
-# "around 10,500 DPs" in the text).
-PAPER_TOTALS = {"turkish": 6527, "syrian": 4088}
+# Extrapolated displaced-population estimates declared in the publication:
+# Turkish 560,000 to other cities + 300,000 within city boundaries;
+# Syrian 55,000 to other cities + 15,000 within city boundaries.
+EXTRAPOLATED_TOTALS = {"turkish": 560_000 + 300_000, "syrian": 55_000 + 15_000}
 SEGMENTS = {"turkish": cfg.SEGMENT_TURKISH, "syrian": cfg.SEGMENT_SYRIAN}
 
 
@@ -142,29 +149,37 @@ def stay_allocation(stays: gpd.GeoDataFrame) -> pd.DataFrame:
 
 
 def dp_counts_per_cell(alloc: pd.DataFrame, users: set,
-                       paper_total: int) -> tuple:
-    """Night-share sums per H3 cell, calibrated to the paper total, k-anonymized."""
+                       extrapolated_total: int) -> tuple:
+    """Extrapolated DP counts per H3 cell, k-anonymized in two steps."""
     sub = alloc[alloc["user_id"].isin(users)]
     mass = sub.groupby("h3_index")["weight"].sum()
     contributors = sub.groupby("h3_index")["user_id"].nunique()
 
-    # calibrate the full distribution to the declared total, round to whole
-    # people, then suppress cells with fewer than k distinct contributing
-    # people OR a published count below k, so no number smaller than k is
-    # ever reported
-    factor = paper_total / mass.sum()
-    scaled = (mass * factor).round().astype(int)
-    keep = (contributors >= K_ANONYMITY) & (scaled >= K_ANONYMITY)
-    published = scaled[keep].sort_values(ascending=False)
+    # step a: primary k-anonymity — keep cells with >= k distinct observed
+    # contributing people
+    protected = mass[contributors >= K_ANONYMITY]
+
+    # step b: distribute the paper's extrapolated population total over the
+    # protected cells proportionally to their observed mass; largest-remainder
+    # rounding keeps the pre-cut sum exactly equal to the total
+    factor = extrapolated_total / protected.sum()
+    exact = protected * factor
+    scaled = np.floor(exact).astype(int)
+    short = extrapolated_total - int(scaled.sum())
+    for cell in (exact - scaled).sort_values(ascending=False).index[:short]:
+        scaled[cell] += 1
+
+    # step c: secondary cut — never report a count below k
+    published = scaled[scaled >= K_ANONYMITY].sort_values(ascending=False)
 
     out = published.rename("dp_count").reset_index()
     meta = {
         "users_in_run": int(sub["user_id"].nunique()),
-        "declared_total": paper_total,
-        "calibration_factor": round(float(factor), 4),
+        "extrapolated_total": extrapolated_total,
+        "people_per_observed_unit": round(float(factor), 2),
         "published_total": int(published.sum()),
-        "suppressed_total": paper_total - int(published.sum()),
-        "suppressed_cells": int((~keep).sum()),
+        "suppressed_total": extrapolated_total - int(published.sum()),
+        "suppressed_cells": int(len(mass) - len(published)),
         "published_cells": int(len(published)),
     }
     return out, meta
@@ -264,8 +279,10 @@ if __name__ == "__main__":
     metadata = {"h3_resolution": H3_RESOLUTION, "k_anonymity": K_ANONYMITY,
                 "format": "GeoParquet, hexagon polygons in EPSG:4326",
                 "allocation": "per-person unit mass split over stay cells by night-spent share",
-                "calibration": "per-group totals scaled to the counts declared in the paper, before suppression",
-                "suppression": "cells with fewer than k distinct contributing people are removed",
+                "protection": "cells with fewer than k distinct observed contributors removed first",
+                "extrapolation": "the paper's estimated displaced-population totals distributed "
+                                 "proportionally over the protected cells",
+                "secondary_cut": "no extrapolated count below k is published",
                 "datasets": {}}
 
     sides = {"origin": stay_allocation(load_side("origin_stays.parquet")),
@@ -274,12 +291,13 @@ if __name__ == "__main__":
         users = set(feats[feats["segment"] == seg]["user_id"].astype("int64"))
         for side, alloc in sides.items():
             name = f"displaced_persons_{side}_h3r6_{group}"
-            out, meta = dp_counts_per_cell(alloc, users, PAPER_TOTALS[group])
+            out, meta = dp_counts_per_cell(alloc, users, EXTRAPOLATED_TOTALS[group])
             to_geoparquet(out, os.path.join(args.out, f"{name}.parquet"))
             metadata["datasets"][name] = meta
             log(f"{name}: {meta['published_cells']} cells, "
-                f"published {meta['published_total']:,} of {meta['declared_total']:,} "
-                f"({meta['suppressed_cells']} cells < k suppressed, "
+                f"published {meta['published_total']:,} of "
+                f"{meta['extrapolated_total']:,} extrapolated "
+                f"({meta['suppressed_cells']} cells suppressed, "
                 f"{meta['suppressed_total']:,} people)")
 
     urban_df, damage_df = indices_per_cell()

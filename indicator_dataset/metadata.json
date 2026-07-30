@@ -3,44 +3,45 @@
   "k_anonymity": 10,
   "format": "GeoParquet, hexagon polygons in EPSG:4326",
   "allocation": "per-person unit mass split over stay cells by night-spent share",
-  "calibration": "per-group totals scaled to the counts declared in the paper, before suppression",
-  "suppression": "cells with fewer than k distinct contributing people are removed",
+  "protection": "cells with fewer than k distinct observed contributors removed first",
+  "extrapolation": "the paper's estimated displaced-population totals distributed proportionally over the protected cells",
+  "secondary_cut": "no extrapolated count below k is published",
   "datasets": {
     "displaced_persons_origin_h3r6_turkish": {
       "users_in_run": 7200,
-      "declared_total": 6527,
-      "calibration_factor": 0.9065,
-      "published_total": 5445,
-      "suppressed_total": 1082,
-      "suppressed_cells": 834,
-      "published_cells": 98
+      "extrapolated_total": 860000,
+      "people_per_observed_unit": 133.78,
+      "published_total": 860000,
+      "suppressed_total": 0,
+      "suppressed_cells": 762,
+      "published_cells": 170
     },
     "displaced_persons_destination_h3r6_turkish": {
       "users_in_run": 7200,
-      "declared_total": 6527,
-      "calibration_factor": 0.9065,
-      "published_total": 2320,
-      "suppressed_total": 4207,
-      "suppressed_cells": 2675,
-      "published_cells": 123
+      "extrapolated_total": 860000,
+      "people_per_observed_unit": 183.44,
+      "published_total": 860000,
+      "suppressed_total": 0,
+      "suppressed_cells": 2316,
+      "published_cells": 482
     },
     "displaced_persons_origin_h3r6_syrian": {
       "users_in_run": 4519,
-      "declared_total": 4088,
-      "calibration_factor": 0.9046,
-      "published_total": 3386,
-      "suppressed_total": 702,
-      "suppressed_cells": 514,
-      "published_cells": 64
+      "extrapolated_total": 70000,
+      "people_per_observed_unit": 17.06,
+      "published_total": 70000,
+      "suppressed_total": 0,
+      "suppressed_cells": 450,
+      "published_cells": 128
     },
     "displaced_persons_destination_h3r6_syrian": {
       "users_in_run": 4519,
-      "declared_total": 4088,
-      "calibration_factor": 0.9046,
-      "published_total": 2375,
-      "suppressed_total": 1713,
-      "suppressed_cells": 1462,
-      "published_cells": 91
+      "extrapolated_total": 70000,
+      "people_per_observed_unit": 20.75,
+      "published_total": 69980,
+      "suppressed_total": 20,
+      "suppressed_cells": 1328,
+      "published_cells": 225
     },
     "urbanization_index_h3r6": {
       "cells": 20634

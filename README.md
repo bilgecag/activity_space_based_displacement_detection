@@ -112,31 +112,33 @@ EPSG:4326 — they can be dragged directly into QGIS (3.28+) or read with
 
 Columns: `h3_index`, `dp_count`, `geometry`.
 
-Construction (see `replication/build_h3_indicators.py`):
+`dp_count` is an **estimated displaced-population count** — the paper's
+extrapolated, debiased estimates distributed over the observed spatial
+pattern — not a count of observed devices.
+
+Construction (see `replication/build_h3_indicators.py`), separately per
+group and side:
 
 1. Pre-disaster stay areas of a displaced person are their origin,
    post-disaster stay areas their destination. A stay location is not a
-   person, so each person contributes one unit of mass distributed over
-   the H3 cells of their stay-location centroids proportionally to the
-   nights spent in each (their night-spent share). Cell values are the
-   sums of these per-person shares: they add up to person counts while
-   keeping the spatial distribution of the actual stay locations, the
+   person, so each observed displaced person contributes one unit of mass
+   distributed over the H3 cells of their stay-location centroids
+   proportionally to the nights spent in each (their night-spent share).
+   This gives the spatial distribution of the actual stay locations, the
    same support as the density maps in the paper.
-2. The sums are calibrated so that, **before any suppression**, each file
-   totals the displaced-person counts declared in the paper: **6,527
-   Turkish and 4,088 Syrian DPs** (≈10,500 in total), and rounded to the
-   nearest whole person. The spatial distribution is the one produced by
-   the replication run.
-3. **k-anonymity (k = 10)** is applied after that calibration, separately
-   for each group and side: a cell is published only if at least ten
-   distinct people of that group contribute to it AND its rounded count
-   is at least ten — no number below ten appears anywhere in the data.
-   The published files therefore sum to the declared totals minus the
-   suppressed remainder; the declared total, published total, and
-   suppressed remainder of every file are given in `metadata.json`.
-   Suppression removes ~17% of the origin-side mass and ~42–64% of the
-   destination-side mass (destinations have a long nationwide tail of
-   small cells).
+2. **Primary k-anonymity (k = 10)**: only cells to which at least ten
+   distinct observed people of the group contribute are kept.
+3. The paper's extrapolated displaced-population estimates are
+   distributed over the protected cells proportionally to their observed
+   mass: **860,000 Turkish DPs** (560,000 displaced to other cities +
+   300,000 within their city boundaries) and **70,000 Syrian DPs**
+   (55,000 + 15,000), rounded to whole people so each file sums exactly
+   to the group total.
+4. **Secondary cut**: any cell whose extrapolated count is below ten is
+   removed, so no number below ten appears anywhere in the data (this
+   removes at most a few tens of people per file; exact figures in
+   `metadata.json`, together with the extrapolated and published totals
+   and suppressed-cell counts).
 
 ### Context indices
 
@@ -151,8 +153,9 @@ rural = 0). The damage index is the severity-weighted damaged-building
 density (collapsed = 1.0, needs demolition = 0.8, heavily damaged = 0.7,
 slightly damaged = 0.3), min-max normalized over all hexagons.
 
-`metadata.json` records the resolution, the k-anonymity parameter,
-calibration factors, and published/suppressed cell counts per dataset.
+`metadata.json` records the resolution, the k-anonymity parameter, the
+extrapolated and published totals, and the suppressed-cell counts per
+dataset.
 
 ### Interactive map
 
